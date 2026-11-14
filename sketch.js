@@ -89,6 +89,7 @@ function draw() { // 更新並繪製目前動畫畫面。
   drawFireflies(); // 繪製森林中的螢火蟲。
   drawCharacters(); // 繪製面對彼此的角色動畫。
   drawAttackEffects(); // 在角色攻擊時繪製專屬閃光特效。
+  drawControlFooter(); // 在畫布底部繪製兩位角色的按鍵操作說明。
 } // 結束畫面繪製函式。
 
 // 使用方向鍵控制右側角色，使用 Z、X、C、S 控制左側角色。
@@ -318,7 +319,7 @@ function drawCharacters() { // 更新並繪製角色動畫。
     const frame = frames[frameIndex]; // 取得目前動作動畫影格。
     const characterWidth = frame.width * (characterHeight / frame.height); // 依照原始圖片比例計算角色寬度。
     const idleBob = actor.airborne ? 0 : sin(frameCount * 0.06 + index * PI) * 3; // 計算角色待機時的輕微上下浮動。
-    const y = height * 0.72 + actor.verticalOffset + idleBob; // 設定角色地面位置與跳躍高度。
+    const y = characterBaseline() + actor.verticalOffset + idleBob; // 設定角色地面位置與跳躍高度。
     push(); // 暫存畫布狀態以便翻轉右側角色。
     translate(actor.x, y); // 將座標原點移至目前角色中心。
     scale(actor.facing, 1); // 依照角色移動方向鏡像精靈圖。
@@ -340,7 +341,7 @@ function drawAttackEffects() { // 在攻擊期間更新並繪製閃光特效。
     const flashSize = characterHeight * (0.62 + pulse * 0.22); // 計算特效目前尺寸。
     const opacity = 255 * (1 - progress); // 計算特效目前透明度。
     const flashX = actor.x + actor.facing * characterHeight * 0.38; // 將特效放在角色攻擊方向前方。
-    const flashY = height * 0.72 + actor.verticalOffset - characterHeight * 0.18; // 將特效放在角色身體前方。
+    const flashY = characterBaseline() + actor.verticalOffset - characterHeight * 0.18; // 將特效放在角色身體前方。
     push(); // 暫存畫布狀態以設定特效方向。
     translate(flashX, flashY); // 將座標原點移至攻擊特效中心。
     scale(actor.facing, 1); // 讓攻擊特效朝向角色面對的方向。
@@ -385,6 +386,94 @@ function drawAttackEffects() { // 在攻擊期間更新並繪製閃光特效。
     pop(); // 還原畫布狀態以免影響其他繪圖。
   } // 結束角色攻擊特效繪製。
 } // 結束攻擊閃光特效函式。
+
+// 繪製含有兩位角色按鍵圖示的半透明頁尾。
+function drawControlFooter() { // 在畫布最下方配置角色操作面板。
+  const footerHeight = constrain(height * 0.16, 84, 126); // 依照畫布高度設定頁尾高度。
+  const footerTop = height - footerHeight; // 計算頁尾上緣位置。
+  const outerPadding = 8; // 設定頁尾外側留白。
+  const panelGap = 8; // 設定兩個角色面板之間的間距。
+  const panelWidth = (width - outerPadding * 2 - panelGap) / 2; // 計算左右操作面板寬度。
+  noStroke(); // 移除頁尾背景外框。
+  fill(8, 20, 30, 218); // 設定半透明深色頁尾背景。
+  rect(0, footerTop, width, footerHeight); // 繪製貼齊畫布底部的頁尾背景。
+  stroke(116, 190, 185, 180); // 設定頁尾上緣的柔和分隔線。
+  strokeWeight(1); // 設定頁尾分隔線粗細。
+  line(0, footerTop, width, footerTop); // 繪製頁尾上緣分隔線。
+  drawControlPanel(outerPadding, footerTop + 5, panelWidth, footerHeight - 10, 0); // 繪製左側角色操作說明。
+  drawControlPanel(outerPadding + panelWidth + panelGap, footerTop + 5, panelWidth, footerHeight - 10, 1); // 繪製右側角色操作說明。
+} // 結束頁尾繪製函式。
+
+// 計算可避開頁尾並讓角色保持在畫面中的地面高度。
+function characterBaseline() { // 回傳角色的地面垂直位置。
+  const characterHeight = min(height * 0.4, width * 0.23, 260); // 計算角色共用顯示高度。
+  const footerHeight = constrain(height * 0.16, 84, 126); // 計算底部操作頁尾高度。
+  return min(height * 0.72, height - footerHeight - characterHeight / 2 - 8); // 需要時將角色往上移以免被頁尾遮住。
+} // 結束角色地面高度計算函式。
+
+// 繪製一位角色的操作面板與按鍵圖示。
+function drawControlPanel(x, y, panelWidth, panelHeight, actorIndex) { // 根據角色編號繪製控制說明。
+  const compact = width < 600; // 判斷是否使用較緊湊的手機版排版。
+  const titleSize = compact ? 10 : 12; // 設定面板標題字級。
+  const labelSize = compact ? 8 : 10; // 設定動作標籤字級。
+  const keySize = constrain(panelWidth * 0.034, 8, 11); // 設定按鍵圖示字級。
+  const headerHeight = compact ? 15 : 17; // 設定標題區高度。
+  const rowHeight = (panelHeight - headerHeight) / 4; // 計算四列操作說明的高度。
+  const controlRows = actorIndex === 0 ? [ // 依照角色編號選擇操作按鍵。
+    { label: "走", combos: ["Z ←", "C →"] }, // 設定左側角色走路按鍵。
+    { label: "跳", combos: ["S ↑", "S+Z ↖", "S+C ↗"] }, // 設定左側角色跳躍按鍵。
+    { label: "跑", combos: ["Z+X ←", "C+X →"] }, // 設定左側角色跑步按鍵。
+    { label: "攻", combos: ["Space+Z ←", "Space+C →"] }, // 設定左側角色攻擊按鍵。
+  ] : [ // 設定右側角色的操作按鍵。
+    { label: "走", combos: ["←", "→"] }, // 設定右側角色走路按鍵。
+    { label: "跳", combos: ["↑", "←+↑ ↖", "→+↑ ↗"] }, // 設定右側角色跳躍按鍵。
+    { label: "跑", combos: ["←+↓", "→+↓"] }, // 設定右側角色跑步按鍵。
+    { label: "攻", combos: ["Space+←", "Space+→"] }, // 設定右側角色攻擊按鍵。
+  ]; // 完成目前角色操作按鍵清單。
+  noStroke(); // 移除操作面板外框。
+  fill(15, 37, 45, 205); // 設定操作面板底色。
+  rect(x, y, panelWidth, panelHeight, 8); // 繪製圓角操作面板。
+  fill(225, 246, 235); // 設定面板標題文字顏色。
+  textSize(titleSize); // 設定面板標題字級。
+  textAlign(LEFT, CENTER); // 將面板標題靠左垂直置中。
+  text(actorIndex === 0 ? "角色 1（左）" : "角色 2（右）", x + 8, y + headerHeight / 2); // 顯示目前角色名稱。
+  stroke(100, 155, 160, 150); // 設定標題與操作列的分隔線顏色。
+  strokeWeight(1); // 設定面板分隔線粗細。
+  line(x + 7, y + headerHeight, x + panelWidth - 7, y + headerHeight); // 繪製面板標題分隔線。
+  for (let rowIndex = 0; rowIndex < controlRows.length; rowIndex += 1) { // 逐列繪製走、跳、跑與攻擊方式。
+    const row = controlRows[rowIndex]; // 讀取目前的動作操作資料。
+    const rowY = y + headerHeight + rowHeight * (rowIndex + 0.5); // 計算目前操作列的垂直中心。
+    const keyHeight = max(11, rowHeight - 4); // 設定按鍵圖示高度。
+    let keyX = x + (compact ? 27 : 33); // 設定按鍵圖示起始位置。
+    noStroke(); // 移除動作標籤外框。
+    fill(185, 216, 210); // 設定動作標籤文字顏色。
+    textSize(labelSize); // 設定動作標籤字級。
+    textAlign(LEFT, CENTER); // 將動作標籤靠左垂直置中。
+    text(row.label, x + 9, rowY); // 顯示目前動作名稱。
+    textSize(keySize); // 設定按鍵圖示文字大小。
+    for (let combo of row.combos) { // 逐一繪製目前動作的按鍵組合。
+      const keyWidth = max(keyHeight + 4, textWidth(combo) + 10); // 依照按鍵文字長度計算圖示寬度。
+      if (keyX + keyWidth > x + panelWidth - 6) { // 按鍵組合超出面板時。
+        break; // 停止繪製以避免超出操作面板。
+      } // 結束面板寬度檢查。
+      drawKeyIcon(combo, keyX, rowY - keyHeight / 2, keyWidth, keyHeight, keySize); // 繪製目前的按鍵圖示。
+      keyX += keyWidth + 4; // 移至下一個按鍵圖示的位置。
+    } // 結束目前列的按鍵組合繪製。
+  } // 結束操作列繪製。
+} // 結束操作面板繪製函式。
+
+// 以圓角按鍵造型繪製操作圖示。
+function drawKeyIcon(label, x, y, iconWidth, iconHeight, fontSize) { // 繪製單一按鍵或按鍵組合。
+  stroke(176, 218, 210, 220); // 設定按鍵圖示外框顏色。
+  strokeWeight(1); // 設定按鍵圖示外框粗細。
+  fill(35, 63, 70, 245); // 設定按鍵圖示底色。
+  rect(x, y, iconWidth, iconHeight, 4); // 繪製圓角按鍵圖示。
+  noStroke(); // 移除按鍵文字外框。
+  fill(242, 250, 239); // 設定按鍵文字顏色。
+  textSize(fontSize); // 設定按鍵文字大小。
+  textAlign(CENTER, CENTER); // 將按鍵文字水平與垂直置中。
+  text(label, x + iconWidth / 2, y + iconHeight / 2); // 在按鍵圖示中央顯示按鍵內容。
+} // 結束按鍵圖示繪製函式。
 
 // 視窗尺寸改變時同步調整畫布與森林配置。
 function windowResized() { // 處理瀏覽器視窗尺寸變更。
