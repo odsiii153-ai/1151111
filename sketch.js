@@ -4,6 +4,16 @@ let characters = {}; // 記錄各角色各動作切分後的影格。
 let actors = []; // 記錄角色位置、方向與跳躍狀態。
 let forestTrees = []; // 記錄森林樹木的繪圖資料。
 let fireflies = []; // 記錄森林螢火蟲的繪圖資料。
+let answerInput; // 記錄數學互動的答案輸入欄。
+let submitButton; // 記錄數學互動的送出按鈕。
+let replayButton; // 記錄完成遊戲後重新開始的按鈕。
+let currentQuestion = null; // 記錄目前數學題目。
+let correctAnswers = 0; // 記錄連續答對的題數。
+let interactionVisible = false; // 記錄角色是否靠近並顯示互動面板。
+let quizWon = false; // 記錄是否已完成五題挑戰。
+let celebrating = false; // 記錄角色是否正在歡呼。
+let celebrationEndsAt = 0; // 記錄歡呼動畫結束的畫格。
+let answerFeedback = ""; // 記錄上一題的作答結果提示。
 
 // 預先載入兩位角色的待機、走路、跑步、跳躍與攻擊精靈圖。
 function preload() { // 在建立畫布前載入所有角色動作圖片。
@@ -51,6 +61,47 @@ function setup() { // 初始化畫布及背景資料。
     createActor(characters.left, width / 2 - characterHeight * 0.55, 1), // 將左側角色 1 設定為預設面向右邊。
     createActor(characters.right, width / 2 + characterHeight * 0.55, -1), // 將右側角色 2 設定為預設面向左邊。
   ]; // 完成角色遊戲狀態建立。
+  answerInput = createInput("", "number"); // 建立數學答案輸入欄。
+  answerInput.attribute("min", "-1000"); // 限制答案輸入的最小值。
+  answerInput.attribute("max", "1000"); // 限制答案輸入的最大值。
+  answerInput.attribute("step", "1"); // 僅接受整數答案。
+  answerInput.attribute("inputmode", "numeric"); // 在行動裝置顯示數字鍵盤。
+  answerInput.attribute("aria-label", "數學題答案"); // 提供輸入欄的無障礙名稱。
+  answerInput.attribute("placeholder", "輸入答案"); // 提示使用者輸入答案。
+  answerInput.style("box-sizing", "border-box"); // 確保輸入欄尺寸包含內距與邊框。
+  answerInput.style("height", "42px"); // 設定輸入欄高度。
+  answerInput.style("padding", "0 12px"); // 設定輸入欄內距。
+  answerInput.style("border", "2px solid #a8dfd3"); // 設定輸入欄邊框。
+  answerInput.style("border-radius", "10px"); // 設定輸入欄圓角。
+  answerInput.style("background", "#f7fff9"); // 設定輸入欄底色。
+  answerInput.style("color", "#17343b"); // 設定輸入文字顏色。
+  answerInput.style("font-size", "18px"); // 設定輸入文字大小。
+  answerInput.style("text-align", "center"); // 將答案置中顯示。
+  answerInput.elt.addEventListener("keydown", handleAnswerKeydown); // 使用 Enter 鍵送出答案。
+  answerInput.hide(); // 初始隱藏答案輸入欄。
+  submitButton = createButton("送出"); // 建立送出答案的按鈕。
+  submitButton.attribute("aria-label", "送出答案"); // 提供送出按鈕的無障礙名稱。
+  submitButton.style("height", "42px"); // 設定送出按鈕高度。
+  submitButton.style("padding", "0 16px"); // 設定送出按鈕內距。
+  submitButton.style("border", "0"); // 移除送出按鈕邊框。
+  submitButton.style("border-radius", "10px"); // 設定送出按鈕圓角。
+  submitButton.style("background", "#f4c96b"); // 設定送出按鈕底色。
+  submitButton.style("color", "#26363a"); // 設定送出按鈕文字顏色。
+  submitButton.style("font-size", "15px"); // 設定送出按鈕文字大小。
+  submitButton.style("font-weight", "bold"); // 強調送出按鈕文字。
+  submitButton.mousePressed(submitAnswer); // 按下按鈕時檢查答案。
+  submitButton.hide(); // 初始隱藏送出按鈕。
+  replayButton = createButton("再玩一次"); // 建立重新開始挑戰的按鈕。
+  replayButton.style("height", "42px"); // 設定重新開始按鈕高度。
+  replayButton.style("padding", "0 20px"); // 設定重新開始按鈕內距。
+  replayButton.style("border", "0"); // 移除重新開始按鈕邊框。
+  replayButton.style("border-radius", "10px"); // 設定重新開始按鈕圓角。
+  replayButton.style("background", "#f4c96b"); // 設定重新開始按鈕底色。
+  replayButton.style("color", "#26363a"); // 設定重新開始按鈕文字顏色。
+  replayButton.style("font-size", "15px"); // 設定重新開始按鈕文字大小。
+  replayButton.style("font-weight", "bold"); // 強調重新開始按鈕文字。
+  replayButton.mousePressed(resetQuiz); // 按下按鈕時重新開始挑戰。
+  replayButton.hide(); // 初始隱藏重新開始按鈕。
   createForest(); // 建立多層森林樹木。
   createFireflies(); // 建立森林螢火蟲。
 } // 結束畫布初始化函式。
@@ -85,15 +136,21 @@ function splitSpriteSheet(sheet) { // 回傳精靈圖中的角色影格。
 // 每一格繪製森林背景、螢火蟲與角色動畫。
 function draw() { // 更新並繪製目前動畫畫面。
   updateCharacters(); // 根據鍵盤輸入更新角色動作與位置。
+  updateInteraction(); // 依照角色距離更新數學互動狀態。
   drawForest(); // 繪製全螢幕森林背景。
   drawFireflies(); // 繪製森林中的螢火蟲。
   drawCharacters(); // 繪製面對彼此的角色動畫。
   drawAttackEffects(); // 在角色攻擊時繪製專屬閃光特效。
   drawControlFooter(); // 在畫布底部繪製兩位角色的按鍵操作說明。
+  drawQuizPanel(); // 在畫布上方繪製數學題目與挑戰進度。
+  positionQuizControls(); // 將答案欄與按鈕放在題目框下方。
 } // 結束畫面繪製函式。
 
 // 使用方向鍵控制右側角色，使用 Z、X、C、S 控制左側角色。
 function keyPressed() { // 在按下跳躍鍵時啟動單次跳躍。
+  if (isAnswerInputFocused()) { // 使用者正在輸入答案時。
+    return; // 避免輸入答案時同時觸發角色操作。
+  } // 結束答案輸入狀態判斷。
   if (keyCode === UP_ARROW) { // 按下上方向鍵時。
     actors[1].jumpRequested = true; // 要求右側角色 2 跳躍。
   } // 結束右側角色跳躍輸入判斷。
@@ -128,6 +185,12 @@ function createActor(sprites, x, facing) { // 回傳角色的初始遊戲狀態�
 
 // 依照兩組控制鍵更新角色動作、水平移動與跳躍物理。
 function updateCharacters() { // 每個動畫畫格更新兩位角色。
+  if (isAnswerInputFocused() || celebrating) { // 輸入答案或角色歡呼時。
+    const neutralInput = { left: false, right: false, run: false, attack: false }; // 暫停一般角色操作。
+    updateActor(actors[0], neutralInput); // 更新左側角色的跳躍或待機動畫。
+    updateActor(actors[1], neutralInput); // 更新右側角色的跳躍或待機動畫。
+    return; // 不讀取一般移動按鍵。
+  } // 結束暫停一般操作判斷。
   const leftInput = { // 讀取左側角色 1 的按鍵狀態。
     left: keyIsDown(90), // 將 Z 鍵設定為向左移動。
     right: keyIsDown(67), // 將 C 鍵設定為向右移動。
@@ -143,6 +206,189 @@ function updateCharacters() { // 每個動畫畫格更新兩位角色。
   updateActor(actors[0], leftInput); // 更新左側角色 1。
   updateActor(actors[1], rightInput); // 更新右側角色 2。
 } // 結束角色更新函式。
+
+// 當角色靠近時啟動題目，並在遠離時暫時隱藏作答介面。
+function updateInteraction() { // 根據角色間距更新互動與歡呼狀態。
+  const characterHeight = min(height * 0.4, width * 0.23, 260); // 計算角色共用顯示高度。
+  const wasVisible = interactionVisible; // 記錄更新前的互動面板狀態。
+  interactionVisible = abs(actors[0].x - actors[1].x) <= characterHeight * 1.05 && !quizWon; // 判斷角色是否足夠靠近。
+  if (wasVisible && !interactionVisible && isAnswerInputFocused()) { // 角色分開且答案欄仍有焦點時。
+    answerInput.elt.blur(); // 讓角色移動操作可以重新使用鍵盤。
+  } // 結束離開互動時的輸入焦點處理。
+  if (interactionVisible && currentQuestion === null) { // 首次靠近且尚未完成挑戰時。
+    currentQuestion = createQuestion(); // 隨機產生第一道數學題。
+  } // 結束題目初始化判斷。
+  if (celebrating && frameCount >= celebrationEndsAt) { // 歡呼動畫播放完畢時。
+    celebrating = false; // 結束角色歡呼狀態。
+  } // 結束歡呼動畫狀態更新。
+} // 結束互動狀態更新函式。
+
+// 隨機產生答案為整數的加、減、乘或除法題目。
+function createQuestion() { // 回傳一題隨機算術題。
+  const operation = floor(random(4)); // 隨機選擇四種基本運算之一。
+  let first; // 記錄題目的第一個運算數。
+  let second; // 記錄題目的第二個運算數。
+  let symbol; // 記錄題目顯示的運算符號。
+  let answer; // 記錄題目的正確答案。
+  if (operation === 0) { // 產生加法題目。
+    first = floor(random(1, 21)); // 產生第一個加數。
+    second = floor(random(1, 21)); // 產生第二個加數。
+    symbol = "+"; // 設定加法符號。
+    answer = first + second; // 計算加法答案。
+  } else if (operation === 1) { // 產生減法題目。
+    first = floor(random(1, 21)); // 產生較大的被減數。
+    second = floor(random(1, first + 1)); // 產生不大於被減數的減數。
+    symbol = "−"; // 設定減法符號。
+    answer = first - second; // 計算減法答案。
+  } else if (operation === 2) { // 產生乘法題目。
+    first = floor(random(1, 11)); // 產生第一個乘數。
+    second = floor(random(1, 11)); // 產生第二個乘數。
+    symbol = "×"; // 設定乘法符號。
+    answer = first * second; // 計算乘法答案。
+  } else { // 產生答案為整數的除法題目。
+    second = floor(random(1, 11)); // 產生除數。
+    answer = floor(random(1, 11)); // 產生整數商。
+    first = second * answer; // 依除數與商計算被除數。
+    symbol = "÷"; // 設定除法符號。
+  } // 結束運算類型判斷。
+  return { text: `${first} ${symbol} ${second} = ?`, answer: answer }; // 回傳題目文字與正確答案。
+} // 結束隨機題目建立函式。
+
+// 以 Enter 鍵或送出按鈕檢查目前答案。
+function submitAnswer() { // 檢查使用者輸入並更新挑戰進度。
+  if (!interactionVisible || !currentQuestion || quizWon) { // 作答介面不可用時。
+    return; // 不處理無效的送出事件。
+  } // 結束作答狀態檢查。
+  const answer = answerInput.value().trim(); // 取得使用者輸入並移除前後空白。
+  if (answer === "" || !Number.isInteger(Number(answer))) { // 輸入不是有效整數時。
+    answerFeedback = "請輸入整數答案"; // 提示使用者輸入整數。
+    answerInput.elt.focus(); // 將游標留在答案欄。
+    return; // 等待使用者修正輸入。
+  } // 結束答案格式檢查。
+  if (Number(answer) !== currentQuestion.answer) { // 答案不正確時。
+    answerFeedback = "再試一次！"; // 鼓勵使用者再次作答。
+    answerInput.value(""); // 清空錯誤答案。
+    answerInput.elt.focus(); // 將游標留在答案欄以便繼續輸入。
+    return; // 保留目前題目。
+  } // 結束答案正確性判斷。
+  correctAnswers += 1; // 累加答對題數。
+  answerInput.value(""); // 清空已送出的答案。
+  if (correctAnswers === 5) { // 完成五題時。
+    quizWon = true; // 標記挑戰完成。
+    celebrating = true; // 啟動角色歡呼。
+    celebrationEndsAt = frameCount + 105; // 設定歡呼動畫持續時間。
+    answerFeedback = ""; // 清除作答提示。
+    actors[0].jumpRequested = true; // 讓左側角色跳起慶祝。
+    actors[1].jumpRequested = true; // 讓右側角色跳起慶祝。
+    return; // 結束本次送出處理。
+  } // 結束完成挑戰判斷。
+  answerFeedback = "答對了！"; // 顯示正確作答提示。
+  currentQuestion = createQuestion(); // 產生下一道隨機題目。
+  answerInput.elt.focus(); // 讓使用者可直接繼續作答。
+} // 結束答案檢查函式。
+
+// 讓答案輸入欄支援 Enter 送出及避免角色按鍵被觸發。
+function handleAnswerKeydown(event) { // 處理答案輸入欄的鍵盤事件。
+  if (event.key === "Enter") { // 使用者按下 Enter 時。
+    event.preventDefault(); // 避免瀏覽器執行表單預設行為。
+    submitAnswer(); // 送出目前答案。
+  } // 結束 Enter 鍵判斷。
+  event.stopPropagation(); // 不讓輸入事件傳遞至遊戲控制。
+} // 結束答案輸入鍵盤事件處理。
+
+// 建立新的五題挑戰並清除舊的作答狀態。
+function resetQuiz() { // 重設數學互動狀態。
+  const characterHeight = min(height * 0.4, width * 0.23, 260); // 計算角色共用顯示高度。
+  actors[0].x = width / 2 - characterHeight * 0.4; // 將左側角色放回中央附近。
+  actors[1].x = width / 2 + characterHeight * 0.4; // 將右側角色放回中央附近。
+  actors[0].facing = 1; // 讓左側角色面向右側角色。
+  actors[1].facing = -1; // 讓右側角色面向左側角色。
+  currentQuestion = createQuestion(); // 隨機產生新挑戰的第一題。
+  correctAnswers = 0; // 重設答對題數。
+  quizWon = false; // 清除完成狀態。
+  celebrating = false; // 結束歡呼狀態。
+  answerFeedback = ""; // 清除上一輪的作答提示。
+  interactionVisible = true; // 顯示新一輪挑戰。
+  answerInput.value(""); // 清空答案輸入欄。
+  answerInput.elt.focus(); // 將游標移至答案輸入欄。
+} // 結束挑戰重設函式。
+
+// 判斷答案輸入欄是否正取得鍵盤焦點。
+function isAnswerInputFocused() { // 回傳答案欄的焦點狀態。
+  return answerInput && document.activeElement === answerInput.elt; // 比對目前作用中的頁面元素。
+} // 結束輸入焦點判斷函式。
+
+// 繪製靠近互動面板或完成挑戰的歡呼面板。
+function drawQuizPanel() { // 在畫布頂端繪製互動題目介面。
+  if (!interactionVisible && !quizWon) { // 角色分開且挑戰尚未完成時。
+    return; // 隱藏題目面板。
+  } // 結束面板顯示狀態判斷。
+  const panelWidth = min(width - 24, 480); // 計算畫布內可用的面板寬度。
+  const panelX = (width - panelWidth) / 2; // 將面板水平置中。
+  const panelY = 18; // 設定面板與畫布頂端的距離。
+  const panelHeight = 124; // 保留題目與進度提示的垂直間距。
+  noStroke(); // 移除面板外框。
+  fill(8, 20, 30, 225); // 設定半透明深色面板底色。
+  rect(panelX, panelY, panelWidth, panelHeight, 16); // 繪製圓角題目面板。
+  stroke(160, 221, 201, 230); // 設定面板外框顏色。
+  strokeWeight(2); // 設定面板外框粗細。
+  noFill(); // 僅繪製面板邊框。
+  rect(panelX, panelY, panelWidth, panelHeight, 16); // 繪製圓角面板外框。
+  noStroke(); // 移除面板文字邊框。
+  fill(192, 230, 215); // 設定面板標題顏色。
+  textAlign(CENTER, CENTER); // 將面板文字置中。
+  textSize(width < 420 ? 13 : 15); // 依畫面寬度調整標題字級。
+  text(quizWon ? "數學挑戰完成！" : "靠近合作答題", width / 2, panelY + 22); // 顯示挑戰標題。
+  if (quizWon) { // 挑戰完成時。
+    fill(255, 220, 126); // 設定歡呼文字的暖黃色。
+    textSize(width < 420 ? 19 : 23); // 設定完成訊息字級。
+    text("太棒了！兩位角色歡呼慶祝！", width / 2, panelY + 67); // 顯示角色慶祝訊息。
+    textSize(18); // 設定星星字級。
+    text("★ ★ ★ ★ ★", width / 2, panelY + 101); // 顯示五顆完成星星。
+    return; // 完成面板繪製。
+  } // 結束挑戰完成面板判斷。
+  fill(255, 247, 215); // 設定數學題目的文字顏色。
+  textSize(width < 420 ? 25 : 31); // 設定題目字級。
+  text(currentQuestion.text, width / 2, panelY + 62); // 顯示目前數學題目。
+  const progressWidth = min(170, panelWidth * 0.46); // 計算五題進度列寬度。
+  const progressStart = width / 2 - progressWidth / 2; // 計算進度列起點。
+  for (let index = 0; index < 5; index += 1) { // 逐一繪製五個答題進度點。
+    fill(index < correctAnswers ? color(244, 201, 107) : color(95, 125, 126)); // 依答題進度設定圓點顏色。
+    circle(progressStart + (index + 0.5) * progressWidth / 5, panelY + 89, 10); // 繪製目前進度圓點。
+  } // 結束進度列繪製。
+  fill(217, 239, 223); // 設定答題狀態提示顏色。
+  textSize(width < 420 ? 11 : 13); // 設定狀態提示字級。
+  text(answerFeedback || `答對 ${correctAnswers} / 5 題`, width / 2, panelY + 109); // 顯示答對進度或作答提示。
+} // 結束數學面板繪製函式。
+
+// 將答案欄、送出按鈕或重新開始按鈕置於題目面板正下方。
+function positionQuizControls() { // 依畫布尺寸配置互動控制項。
+  if (interactionVisible && !quizWon) { // 題目互動可作答時。
+    const panelWidth = min(width - 24, 480); // 計算題目面板寬度。
+    const inputWidth = min(220, panelWidth * 0.56); // 計算答案欄寬度。
+    const buttonWidth = 76; // 設定送出按鈕寬度。
+    const controlsWidth = inputWidth + 8 + buttonWidth; // 計算輸入欄與按鈕總寬度。
+    const controlsX = (width - controlsWidth) / 2; // 將作答控制項水平置中。
+    const controlsY = 150; // 將作答控制項放在面板下方。
+    answerInput.position(controlsX, controlsY); // 定位答案輸入欄。
+    answerInput.size(inputWidth, 42); // 設定答案輸入欄寬度。
+    submitButton.position(controlsX + inputWidth + 8, controlsY); // 定位送出按鈕。
+    submitButton.size(buttonWidth, 42); // 設定送出按鈕寬度。
+    answerInput.show(); // 顯示答案輸入欄。
+    submitButton.show(); // 顯示送出按鈕。
+    replayButton.hide(); // 隱藏重新開始按鈕。
+    return; // 完成作答控制項配置。
+  } // 結束作答控制項顯示判斷。
+  answerInput.hide(); // 隱藏答案輸入欄。
+  submitButton.hide(); // 隱藏送出按鈕。
+  if (quizWon && !celebrating) { // 歡呼結束且挑戰已完成時。
+    replayButton.position((width - 112) / 2, 151); // 將重新開始按鈕置中於歡呼面板下方。
+    replayButton.size(112, 42); // 設定重新開始按鈕寬度。
+    replayButton.show(); // 顯示重新開始按鈕。
+  } else { // 尚在歡呼或挑戰未完成時。
+    replayButton.hide(); // 隱藏重新開始按鈕。
+  } // 結束重新開始按鈕顯示判斷。
+} // 結束互動控制項配置函式。
 
 // 更新單一角色的移動方向、跑步狀態與跳躍軌跡。
 function updateActor(actor, input) { // 依照輸入更新角色遊戲狀態。
